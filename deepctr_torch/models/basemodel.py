@@ -3,6 +3,7 @@
 
 Author:
     Weichen Shen,weichenswc@163.com
+    zanshuxun, zanshuxun@aliyun.com
 
 """
 from __future__ import print_function
@@ -24,7 +25,7 @@ except ImportError:
     from tensorflow.python.keras._impl.keras.callbacks import CallbackList
 
 from ..inputs import build_input_features, SparseFeat, DenseFeat, VarLenSparseFeat, get_varlen_pooling_list, \
-    create_embedding_matrix, varlen_embedding_lookup
+    create_embedding_matrix, varlen_embedding_lookup, create_linear_matrix
 from ..layers import PredictionLayer
 from ..layers.utils import slice_arrays
 from ..callbacks import History
@@ -75,7 +76,7 @@ class Linear(nn.Module):
 
         sparse_embedding_list += varlen_embedding_list
 
-        linear_logit = torch.zeros([X.shape[0], 1]).to(sparse_embedding_list[0].device)
+        linear_logit = torch.zeros([X.shape[0], 1]).to(self.device)
         if len(sparse_embedding_list) > 0:
             sparse_embedding_cat = torch.cat(sparse_embedding_list, dim=-1)
             if sparse_feat_refine_weight is not None:
@@ -116,6 +117,8 @@ class BaseModel(nn.Module):
         #             {feat.embedding_name: nn.Embedding(feat.dimension, embedding_size, sparse=True) for feat in
         #              self.dnn_feature_columns}
         #         )
+
+        self.linear_dict = create_linear_matrix(dnn_feature_columns, init_std, device=device)
 
         self.linear_model = Linear(
             linear_feature_columns, self.feature_index, device=device)
@@ -344,7 +347,7 @@ class BaseModel(nn.Module):
 
         return np.concatenate(pred_ans).astype("float64")
 
-    def input_from_feature_columns(self, X, feature_columns, embedding_dict, support_dense=True):
+    def input_from_feature_columns(self, X, feature_columns, embedding_dict, linear_dict, support_dense=True):
 
         sparse_feature_columns = list(
             filter(lambda x: isinstance(x, SparseFeat), feature_columns)) if len(feature_columns) else []
@@ -370,7 +373,12 @@ class BaseModel(nn.Module):
         dense_value_list = [X[:, self.feature_index[feat.name][0]:self.feature_index[feat.name][1]] for feat in
                             dense_feature_columns]
 
-        return sparse_embedding_list + varlen_sparse_embedding_list, dense_value_list
+        # custom code
+        dense_linear_list = [linear_dict[feat.embedding_name](
+            X[:, self.feature_index[feat.name][0]:self.feature_index[feat.name][1]]).unsqueeze(1) for
+            feat in dense_feature_columns]
+
+        return sparse_embedding_list + varlen_sparse_embedding_list, dense_value_list, dense_linear_list
 
     def compute_input_dim(self, feature_columns, include_sparse=True, include_dense=True, feature_group=False):
         sparse_feature_columns = list(
@@ -476,6 +484,10 @@ class BaseModel(nn.Module):
                         sample_weight,
                         labels)
 
+    @staticmethod
+    def _accuracy_score(y_true, y_pred):
+        return accuracy_score(y_true, np.where(y_pred > 0.5, 1, 0))
+
     def _get_metrics(self, metrics, set_eps=False):
         metrics_ = {}
         if metrics:
@@ -490,8 +502,7 @@ class BaseModel(nn.Module):
                 if metric == "mse":
                     metrics_[metric] = mean_squared_error
                 if metric == "accuracy" or metric == "acc":
-                    metrics_[metric] = lambda y_true, y_pred: accuracy_score(
-                        y_true, np.where(y_pred > 0.5, 1, 0))
+                    metrics_[metric] = self._accuracy_score
                 self.metrics_names.append(metric)
         return metrics_
 
