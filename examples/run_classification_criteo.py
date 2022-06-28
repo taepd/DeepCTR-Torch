@@ -14,8 +14,13 @@ if __name__ == "__main__":
     sparse_features = ['C' + str(i) for i in range(1, 27)]
     dense_features = ['I' + str(i) for i in range(1, 14)]
 
+    embedding_dim = 8
+    unstructured_feature_names = ['U']
+    unstructured_features = ['U' + str(i) for i in range(1, embedding_dim + 1)]
+
     data[sparse_features] = data[sparse_features].fillna('-1', )
     data[dense_features] = data[dense_features].fillna(0, )
+    data[unstructured_features] = torch.rand(8).tolist()
     target = ['label']
 
     # 1.Label Encoding for sparse features,and do simple Transformation for dense features
@@ -26,10 +31,10 @@ if __name__ == "__main__":
     data[dense_features] = mms.fit_transform(data[dense_features])
 
     # 2.count #unique features for each sparse field,and record dense feature field name
+    fixlen_feature_columns = [SparseFeat(feat, data[feat].nunique(), embedding_dim=embedding_dim) for feat in sparse_features] + \
+                             [DenseFeat(feat, 1, embedding_dim=embedding_dim) for feat in dense_features]
 
-    fixlen_feature_columns = [SparseFeat(feat, data[feat].nunique())
-                              for feat in sparse_features] + [DenseFeat(feat, 1, )
-                                                              for feat in dense_features]
+    fixlen_feature_columns.extend([DenseFeat(name, embedding_dim, embedding_dim=embedding_dim) for name in unstructured_feature_names])
 
     dnn_feature_columns = fixlen_feature_columns
     linear_feature_columns = fixlen_feature_columns
@@ -40,8 +45,16 @@ if __name__ == "__main__":
     # 3.generate input data for model
 
     train, test = train_test_split(data, test_size=0.2, random_state=2020)
-    train_model_input = {name: train[name] for name in feature_names}
-    test_model_input = {name: test[name] for name in feature_names}
+    train_model_input = {}
+    test_model_input = {}
+    for name in feature_names:
+        if name not in unstructured_feature_names:
+            train_model_input[name] = train[name]
+            test_model_input[name] = test[name]
+        else:
+            train_model_input[name] = train[[name+f'{i}' for i in range(1, embedding_dim + 1)]].values.tolist()
+            test_model_input[name] = test[[name+f'{i}' for i in range(1, embedding_dim + 1)]].values.tolist()
+    # test_model_input = {name: test[name] for name in feature_names}
 
     # 4.Define Model,train,predict and evaluate
 
@@ -58,7 +71,7 @@ if __name__ == "__main__":
     model.compile("adagrad", "binary_crossentropy",
                   metrics=["binary_crossentropy", "auc"], )
 
-    history = model.fit(train_model_input, train[target].values, batch_size=32, epochs=10, verbose=2,
+    history = model.fit(train_model_input, train[target].values, batch_size=32, epochs=3, verbose=2,
                         validation_split=0.2)
     pred_ans = model.predict(test_model_input, 256)
     print("")

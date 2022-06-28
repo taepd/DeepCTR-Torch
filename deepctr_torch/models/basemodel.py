@@ -190,8 +190,11 @@ class BaseModel(nn.Module):
         else:
             val_x = []
             val_y = []
+        # custom code
         for i in range(len(x)):
-            if len(x[i].shape) == 1:
+            if type(x[i]) is list:
+                x[i] = np.array(x[i])
+            elif len(x[i].shape) == 1:
                 x[i] = np.expand_dims(x[i], axis=1)
 
         train_tensor_data = Data.TensorDataset(
@@ -284,17 +287,17 @@ class BaseModel(nn.Module):
                 epoch_time = int(time.time() - start_time)
                 print('Epoch {0}/{1}'.format(epoch + 1, epochs))
 
-                eval_str = "{0}s - loss: {1: .4f}".format(
+                eval_str = "{0}s - loss: {1: .8f}".format(
                     epoch_time, epoch_logs["loss"])
 
                 for name in self.metrics:
                     eval_str += " - " + name + \
-                                ": {0: .4f}".format(epoch_logs[name])
+                                ": {0: .8f}".format(epoch_logs[name])
 
                 if do_validation:
                     for name in self.metrics:
                         eval_str += " - " + "val_" + name + \
-                                    ": {0: .4f}".format(epoch_logs["val_" + name])
+                                    ": {0: .8f}".format(epoch_logs["val_" + name])
                 print(eval_str)
             callbacks.on_epoch_end(epoch, epoch_logs)
             if self.stop_training:
@@ -328,8 +331,11 @@ class BaseModel(nn.Module):
         model = self.eval()
         if isinstance(x, dict):
             x = [x[feature] for feature in self.feature_index]
+        # custom code
         for i in range(len(x)):
-            if len(x[i].shape) == 1:
+            if type(x[i]) is list:
+                x[i] = np.array(x[i])
+            elif len(x[i].shape) == 1:
                 x[i] = np.expand_dims(x[i], axis=1)
 
         tensor_data = Data.TensorDataset(

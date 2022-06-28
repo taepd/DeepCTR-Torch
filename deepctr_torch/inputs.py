@@ -189,7 +189,7 @@ def create_linear_matrix(feature_columns, init_std=0.0001, device='cpu'):
         filter(lambda x: isinstance(x, DenseFeat), feature_columns)) if len(feature_columns) else []
 
     linear_dict = nn.ModuleDict(
-        {feat.embedding_name: nn.Linear(1, feat.embedding_dim)
+        {feat.embedding_name: nn.Linear(feat.dimension, feat.embedding_dim)
          for feat in
          dense_feature_columns}
     )

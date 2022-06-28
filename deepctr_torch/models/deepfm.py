@@ -71,7 +71,7 @@ class DeepFM(BaseModel):
         logit = self.linear_model(X)
 
         # custom code
-        if self.use_fm and len(sparse_embedding_list + dense_value_list) > 0:
+        if self.use_fm and len(sparse_embedding_list + dense_linear_list) > 0:
             fm_input = torch.cat(sparse_embedding_list + dense_linear_list, dim=1)
             logit += self.fm(fm_input)
 
